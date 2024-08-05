@@ -3,17 +3,23 @@
 std::string HttpResponse::_constructPath(const std::string& requestPath, const std::string &root, const std::string &index) {
 	std::string path = requestPath;
 
+	// std::cout << path << "\n";
     if (path.empty() || path[0] != '/') {
         path = "/" + path;
     }
 	if (!path.empty() && path[path.length() - 1] == '/') {
         path += index;
     }
-    // Check if there is no extension by finding the last dot in the string
-    else if (path.find_last_of('.') == std::string::npos) {
+	// Check if there is no extension by finding the last dot in the string
+    else if (path.find_last_of('.') == std::string::npos && isDirectory((root + path).c_str())) {
+		std::cout << "makaynach noqta\n";
         path += "/" + index;
     }
     std::string filePath = root + path;
+	// std::cout << "Construct: " << filePath << "\n";
+    // if (isDirectory(filePath.c_str())) {
+    //     path += "/" + index;
+    // }
     return filePath;
 }
 
@@ -47,50 +53,76 @@ bool HttpResponse::isDirHasIndexFiles() {
 				_isFile();
                 return true;
             }
-			else {
-				buildResponse(404);
-				return true;
-			}
+			// else {
+				
+			// 	return true;
+			// }
 		}
+		// std::cout << "hna fin khass yreturner error\n";
+		buildResponse(404); //or 500 ???
 		return true;
 	}
 	return false;
 }
 
-std::string findDirName(const std::string& path, const std::string& root)
+// std::string	HttpResponse::_findDirectoryName() {
+// 	size_t rootPos = _filePath.find(_root);
+//     if (rootPos == std::string::npos)
+//         return "";
+
+//     // Remove root from the path
+//     std::string dirname = _filePath.substr(rootPos + _root.length());
+
+// 	//Create a string stream from the path
+//     std::istringstream iss(dirname);
+
+//     // Tokenize the path by '/'
+//     std::string token;
+//     std::string lastDirName;
+//     while (std::getline(iss, token, '/')) {
+//         if (!token.empty()) {
+//             lastDirName = token;
+//         }
+//     }
+//     return lastDirName;
+// }
+
+std::string findDirectoryName(const std::string& path, const std::string& root)
 {
+	// Ensure root ends with '/'
     std::string adjustedRoot = root;
     if (!root.empty() && root[root.length() - 1] != '/')
     {
         adjustedRoot += '/';
     }
 
+    // Find the position where root ends in the path
     size_t rootPos = path.find(adjustedRoot);
     if (rootPos == std::string::npos)
         return "";
 
+    // Remove root from the path
     std::string dirname = path.substr(rootPos + adjustedRoot.length());
 
+    // Find the last '/' character in the remaining path
     size_t pos = dirname.find_last_of('/');
     if (pos == std::string::npos)
         return "";
 
+    // Extract the dirname
     dirname = dirname.substr(0, pos);
     return "/" + dirname;
 }
 
-void	HttpResponse::_getAutoIndex() 
-{
-	if (_autoindex) 
-    {
+void	HttpResponse::_getAutoIndex() {
+	if (_autoindex) {
 		std::string path = _filePath;
     	DIR *dir = opendir(path.c_str());
 
     	if (dir == NULL) {
         	return;
     	}
-		std::string directory = _location.getLocationName().empty() ? findDirName(_filePath, _root) + "/" : _location.getLocationName() + findDirName(_filePath, _root) + "/";
-		// _findDirectoryName();
+		std::string directory = _location.getLocationName().empty() ? findDirectoryName(_filePath, _root) + "/" : _location.getLocationName() + findDirectoryName(_filePath, _root) + "/";
 		// std::cout << directory << "\n";
 
 		std::ostringstream listeningfile;
@@ -234,67 +266,62 @@ std::string findContentType(std::string response)
     return contentType;
 }
 
-
-void HttpResponse::_isFile() 
+void	HttpResponse::_isFile() 
 {
-    std::string script_name = Get_File_Name_From_URI();
-
+    // Handle file
+	std::string script_name = Get_File_Name_From_URI();
+	std::string filePath = _client.getRequest().getUri();
     std::ifstream file(_filePath.c_str(), std::ios::in | std::ios::binary);
-    if (file) {
+	if (file) 
+	{
+		std::string extension = _filePath.substr(_filePath.find_last_of('.'));
 
-        std::string extension = _filePath.substr(_filePath.find_last_of('.'));
-
-        if (extension == ".php" || extension == ".py") {
-
-            size_t pos;
-            CGI cgi(_client, _filePath);
-            cgi.set_environmentVariables(script_name);
-            cgi.RUN();
-
-            if (cgi.status_code != 200) {
-                buildResponse(cgi.status_code);
-                return;
-            }
-
-            std::string cgi_headers = extractHeaders(_client.getResponse());
-            // std::cout << "CGI headers: " << cgi_headers << std::endl;
-
-            pos = cgi_headers.find("Set-Cookie");
+		if (extension == ".php" || extension == ".py")
+		{
+			size_t pos;
+			CGI cgi(_client, _filePath);
+			cgi.set_environmentVariables(script_name);
+			cgi.RUN();
+			if (cgi.status_code != 200)
+			{  
+				// std::cout << "ERROCODE CGI " << cgi.status_code << std::endl;
+				buildResponse(cgi.status_code);
+				return;
+			}
+			std::string cgi_headers = extractHeaders(_client.getResponse());
+			//std::cout << "Headers CGI: " << cgi_headers << "\n";
+			pos = cgi_headers.find("Set-Cookie");
             if (pos != std::string::npos) {
                 cgi_headers = cgi_headers.substr(pos);
                 pos = cgi_headers.find("\r\n");
                 this->_cookie = cgi_headers.substr(0, pos);
+				this->_cookie = this->_cookie.substr(12);
             }
+			std::string response_cgi = _client.getResponse();
+			_contentType = findContentType(response_cgi);
+			_client.setResponseBody(extractBody(_client.getResponse()));
+			std::stringstream ss;
+			ss << _client.getResponseBody().length();
+			std::string body_length = ss.str();
+			_headers["Content-Length"] = body_length;
+			_client.setResponseHeader(createResponseHeader(200, "Nothing"));
+			_isText = true;
+			return;
+		}
+		_contentType = getContentType(_filePath);
+		std::string header = createResponseHeader(200, "Nothing");
+		_client.setResponseHeader(header);
+		_client.setResponseBody(_filePath);
+		// std::cout << "the file exist: " << "'" << _filePath << "'\n";
+		// std::cout << _client.getResponseBody() << std::endl;
 
-            std::string response_cgi = _client.getResponse();
-            _contentType = findContentType(response_cgi);
-            _client.setResponseBody(extractBody(_client.getResponse()));
-
-            std::stringstream ss;
-            ss << _client.getResponseBody().length();
-            std::string body_length = ss.str();
-            _headers["Content-Length"] = body_length;
-
-            _client.setResponseHeader(createResponseHeader(200, "Nothing"));
-            _isText = true;
-
-            return;
-        }
-
-        _contentType = getContentType(_filePath);
-        std::string header = createResponseHeader(200, "Nothing");
-        _client.setResponseHeader(header);
-        _client.setResponseBody(_filePath);
-
-        std::cout << "Static file response set" << std::endl;
-        return;
-    } else {
-        std::cout << "File not found: " << _filePath << std::endl;
-        buildResponse(404);
-        return;
-    }
+		return ;
+	}
+	else {
+		buildResponse(404);
+		return ;
+	}
 }
-
 
 int	HttpResponse::_checkRequestedType() {
 	struct stat path_stat;
@@ -309,9 +336,18 @@ int	HttpResponse::_checkRequestedType() {
 	return 3;
 }
 
+void	HttpResponse::hasSlahInTheEnd() {
+	if (_filePath[_filePath.size() - 1] != '/')
+    {
+       _filePath += "/";
+	//    std::cout << "adding slash: "<< _filePath << "\n";
+        buildResponse(301);
+    }
+}
+
 void	HttpResponse::_isFolder() {
 	// std::cout << "foldeeer\n";
-	// isUrihasSlashInTHeEnd();
+	hasSlahInTheEnd();
 	if (isDirHasIndexFiles())
 		return;
 	else {
@@ -320,26 +356,21 @@ void	HttpResponse::_isFolder() {
 	}
 }
 
-void	HttpResponse::handleGetMethod() 
-{
-	if (!_isSupportedMethod("GET")) 
-    {
+void	HttpResponse::handleGetMethod() {
+	if (!_isSupportedMethod("GET")) {
 		buildResponse(405);
 		return ;
 	}
 	int type = _checkRequestedType();
-	if (type == FILE_TYPE) 
-    {
+	if (type == FILE_TYPE) {
 		_isFile();
 		return;
 	}
-	else if (type == FOLDER_TYPE) 
-    {
+	else if (type == FOLDER_TYPE) {
 		_isFolder();
 		return ;
 	}
-	else if (type == ERROR)
-    {
+	else if (type == ERROR){
 		buildResponse(404);
 		return ;
 	}

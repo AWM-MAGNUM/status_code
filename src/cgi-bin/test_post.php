@@ -1,3 +1,4 @@
+#!/usr/bin/php-cgi
 <?php
 if (isset($_POST["sub"])) {
     if (isset($_POST["name"])) {
@@ -20,7 +21,7 @@ if (isset($_POST["sub"])) {
     <title>Document</title>
 </head>
 <body> 
-    <form  method="post" action="">
+    <form  method="POST" action="">
         <input name="name" />
         <input name="sub" type="submit" />
     </form>

@@ -27,11 +27,12 @@ class HttpResponse {
 		std::string	createResponseHeader(int errCode, std::string flag);
 		void	findStatusCode(int code);
 		std::string	getRequestedResource(HttpRequest &req);
-		std::string generateDate();
+		static std::string generateDate();
 		std::string deleteRedundantSlash(std::string uri);
 		bool	isText() const;
 		void	handleGetMethod();
 		void	isUrihasSlashInTHeEnd();
+		void	hasSlahInTheEnd();
 		bool	isDirHasIndexFiles();
 		
 		off_t	getFileSize();
@@ -78,7 +79,7 @@ class HttpResponse {
 		bool	_slashSetted;
 		std::map<std::string, std::string>	_interpreter;
 		std::string	_cookie;
-		bool postProcessed;
+		std::string _respCookie;
 
 		void	_handleDefaultErrors();
 		bool	_isSupportedMethod(std::string meth);
@@ -95,6 +96,7 @@ class HttpResponse {
 
 std::string getContentType(std::string filename);
 std::string	getMimeTypes(std::string flag, std::string extension);
-std::string findDirName(const std::string& path, const std::string& root);
+std::string	findDirectoryName(const std::string& path, const std::string& root);
+bool		isDirectory(const char* path);
 
 #endif

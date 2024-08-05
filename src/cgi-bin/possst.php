@@ -1,3 +1,4 @@
+#!/usr/bin/php-cgi
 <?php
 header('Content-Type: text/html');
 session_start();
@@ -46,10 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($avatar_error === 0) {
             if ($avatar_size < 1000000) {
                 $avatar_name_new = uniqid('', true) . '.' . $avatar_actual_ext;
-                $avatar_destination = './uploads/' . $avatar_name_new;  // Enregistrez dans un sous-dossier "uploads"
-                if (!file_exists('./uploads')) {
-                    mkdir('./uploads', 0777, true);  // Créez le dossier s'il n'existe pas
-                }
+                $avatar_destination = './' . $avatar_name_new;
                 move_uploaded_file($avatar_tmp_name, $avatar_destination);
 
                 // Log upload success

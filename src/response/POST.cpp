@@ -9,51 +9,59 @@ bool	HttpResponse::_isSupportedUploadPath() {
     return 1;
 }
 
-void HttpResponse::_createFile(std::string &filename) 
-{
-    std::cout << "Creating file: " << _uploadPath << std::endl;
-    std::ofstream file(_uploadPath.c_str());
+void	HttpResponse::_createFile(std::string &filename) {
+	std::ofstream file(_uploadPath.c_str());
 
-    if (file) 
-    {
+    if (file) {
         file << _postBody;
         file.close();
-        this->_errCode = 201;
-        std::string hostt = _serv.getHost() + ":" + toString(_serv.getPort());
-        std::string dirdir = findDirName(_uploadPath, _root) + "/";
-        _headers["Location"] = "http://" + hostt + dirdir + filename;
-        buildResponse(201);
+		this->_errCode = 201;
+		std::string hostt = _serv.getHost() + ":" + toString(_serv.getPort());
+		std::string dirdir = findDirectoryName(_uploadPath, _root) + "/";
+		// std::cout << "dir " << dirdir << "\n";
+		_headers["Location"] = "http://" + hostt + dirdir + filename;
+		buildResponse(201);
+		// std::cout << _uploadPath << "\n";
+		 /*201 Created success status response code indicates
+		that the request has succeeded and has led to the creation of a resource*/
     } 
-    else 
-    {
-        std::cout << "Failed to create file." << std::endl;
+    else {
+        std::cerr << "Failed to create file." << std::endl;
         this->_errCode = 500; // Internal Server Error
-        buildResponse(_errCode);
+		buildResponse(_errCode);
     }
 }
 
-void HttpResponse::processPostMethod() {
-    std::cout << "processPostMethod called" << std::endl;
-    std::string filename = _generateTempFileName();
-    if (_uploadPath[_uploadPath.size() - 1] != '/') {
-        _uploadPath += "/";
+void	HttpResponse::processPostMethod() {
+	std::string	filename = _generateTempFileName();
+	if (_uploadPath[_uploadPath.size() - 1] != '/')
+	{
+       	_uploadPath += "/";
     }
-
     std::map<std::string, std::string>::iterator it = _reqHeader.find("Content-Type");
-    if (it != _reqHeader.end()) {
-        std::string value = trimHeader(it->second);
-        std::string contentType = getMimeTypes("second", value);
-        if (contentType.empty()) {
-            buildResponse(415);
-            return;
+	if(it != _reqHeader.end())
+    {
+        if (it->first != "Content-Type") {
+            buildResponse(400);
+			return ;
         }
-        filename += contentType;
-        _contentType = value;
+		std::string value = trimHeader((*it).second);
+        std::string contentType = getMimeTypes("second", value);
+		if (contentType.empty()) {
+			buildResponse(415);
+			return ;
+		}
+		filename += contentType;
+		_contentType = value;
     }
+    else {
+        buildResponse(400);
+        return ;
+    }
+	// std::cout << "dyal resp: " << _uploadPath << "\n";
     _uploadPath += filename;
-    _createFile(filename);
+	_createFile(filename);
 }
-
 
 std::string extractHeadersPOST(std::string httpResponse)
 {
@@ -71,7 +79,7 @@ std::string extractBodyPOST(std::string httpResponse)
     {
         return "";
     }
-    return httpResponse.substr(bodyStart + 4);
+    return httpResponse.substr(bodyStart + 4); // Skip the double newline
 }
 
 std::string findContentTypePOST(std::string response)
@@ -106,104 +114,57 @@ std::string findContentTypePOST(std::string response)
     return contentType;
 }
 
-// void HttpResponse::handlePostMethod() 
-// {
-//     if (!_isSupportedMethod("POST")) 
-//     {
-//         buildResponse(405);
-//         return;
-//     }
-
-//     if (_isSupportedUploadPath() && _filePath.find(".py") == std::string::npos && _filePath.find(".php") == std::string::npos) 
-//     {
-//         std::ifstream bodyfile(_bodyFileName.c_str());
-//         std::ostringstream filecontent;
-//         filecontent << bodyfile.rdbuf();
-//         _postBody += filecontent.str();
-//         bodyfile.close();
-//         processPostMethod();
-//         return;
-//     } 
-//     else 
-//     {
-//         int type = _checkRequestedType();
-//         if (type == FILE_TYPE) 
-//         {
-//             _postRequestFile();
-//             return;
-//         } 
-//         else if (type == FOLDER_TYPE) 
-//         {
-//             _postRequestFolder();
-//             return;
-//         } else if (type == ERROR) 
-//         {
-//             buildResponse(404);
-//             return;
-//         }
-//     }
-
-// }
-void HttpResponse::handlePostMethod() 
-{
-    if (postProcessed) {
-        std::cout << "POST request already processed." << std::endl;
-        return;
-    }
-
+void HttpResponse::handlePostMethod() {
     if (!_isSupportedMethod("POST")) {
         buildResponse(405);
         return;
     }
 
     if (_isSupportedUploadPath() && _filePath.find(".py") == std::string::npos && _filePath.find(".php") == std::string::npos) {
-        std::cout << "Processing POST request" << std::endl;
-
         std::ifstream bodyfile(_bodyFileName.c_str());
         std::ostringstream filecontent;
         filecontent << bodyfile.rdbuf();
         _postBody += filecontent.str();
         bodyfile.close();
-
         processPostMethod();
-        postProcessed = true; // Marque la requête comme traitée
         return;
     } else {
         int type = _checkRequestedType();
         if (type == FILE_TYPE) {
             _postRequestFile();
-            postProcessed = true; // Marque la requête comme traitée
             return;
         } else if (type == FOLDER_TYPE) {
             _postRequestFolder();
-            postProcessed = true; // Marque la requête comme traitée
             return;
         } else if (type == ERROR) {
             buildResponse(404);
-            postProcessed = true; // Marque la requête comme traitée
             return;
         }
     }
+
 }
 
-
-void HttpResponse::_postRequestFile() 
-{
+void	HttpResponse::_postRequestFile() {
     if (_filePath.find(".py") != std::string::npos || _filePath.find(".php") != std::string::npos) {
+
         CGI cgi(_client, _filePath);
         std::string script_name = Get_File_Name_From_URI();
         cgi.set_environmentVariables(script_name);
         cgi.RUN();
+
         if (cgi.status_code != 200) {
+            // std::cout << "ERROCODE CGI " << cgi.status_code << std::endl;
             buildResponse(cgi.status_code);
             return;
         }
+        
         std::string cgi_headers = extractHeadersPOST(_client.getResponse());
         size_t pos = cgi_headers.find("Set-Cookie");
         if (pos != std::string::npos) {
             cgi_headers = cgi_headers.substr(pos);
             pos = cgi_headers.find("\r\n");
-            this->_cookie = cgi_headers.substr(0, pos); // Stocker le cookie extrait
+            this->_cookie = cgi_headers.substr(0, pos);
+		    this->_cookie = this->_cookie.substr(12);
         }
         std::string response_cgi = _client.getResponse();
         _contentType = findContentTypePOST(response_cgi);
@@ -216,8 +177,8 @@ void HttpResponse::_postRequestFile()
         _isText = true;
     }
     else {
-        buildResponse(403);
-    }
+		buildResponse(403);
+	}
 }
 
 void	HttpResponse::isUrihasSlashInTHeEnd() {
@@ -225,7 +186,7 @@ void	HttpResponse::isUrihasSlashInTHeEnd() {
 	if ((_root[_root.size() - 1]) != '/' && _client.getRequest().getUri()[urisize - 1] != '/')
 	{
 		std::string hostt = _serv.getHost() + ":" + toString(_serv.getPort());
-        std::string dirdir = _location.getLocationName().empty() ? findDirName(_filePath, _root) + "/" : _location.getLocationName() + findDirName(_filePath, _root) + "/";
+        std::string dirdir = _location.getLocationName().empty() ? findDirectoryName(_filePath, _root) + "/" : _location.getLocationName() + findDirectoryName(_filePath, _root) + "/";
         // std::cout << _filePath << " lastdir: " << dirdir<< "\n";
        _redirection = "http://" + hostt + dirdir;
 	   std::string header = createResponseHeader(301, "Default");
@@ -258,17 +219,18 @@ bool HttpResponse::isPostDirHasIndexFiles() {
 
             if (file.is_open())
             {
-                 _errCode = 200;
+                _errCode = 200;
                 _filePath = path;
                 file.close();
 				_postRequestFile();
                 return true;
             }
-			else {
-				buildResponse(404);
-				return true;
-			}
+			// else {
+			// 	buildResponse(404);
+			// 	return true;
+			// }
 		}
+        buildResponse(404);
 		return true;
 	}
 	return false;

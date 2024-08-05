@@ -108,7 +108,6 @@ void WebServer::setupServerSockets()
         }
         addSocketFd(sockfd);
         FD_SET(sockfd, &this->masterSet);
-        //you should add the one of write
         if (sockfd > highestFd) 
             this->highestFd = sockfd;
        
@@ -117,6 +116,12 @@ void WebServer::setupServerSockets()
        std::cout << "Server " << (*serverConfigs)[i].getServerName() 
                  << " set up on " << (*serverConfigs)[i].getHost() 
                  << ":" << (*serverConfigs)[i].getPort() << " with socket: " << sockfd << std::endl;
+        
+        if (serverSockets.empty()) 
+        {
+            std::cerr << "Error: serverSockets is empty after setupServerSockets()" << std::endl;
+            exit(EXIT_FAILURE);
+        }
     }
 }
 
@@ -141,7 +146,7 @@ void WebServer::CheckRequestStatus(NetworkClient &client)
             if (request.setBody(request_data))
                 request.set_requestStatus(HttpRequest::REQUEST_READY);
         }
-        else if (request.getErrorCode() == 400 || request.getErrorCode() == 501)
+        else if (request.getErrorCode() == 400 || request.getErrorCode() == 408 || request.getErrorCode() == 501)
             request.set_requestStatus(HttpRequest::REQUEST_READY);
     }
 }
@@ -150,23 +155,37 @@ void WebServer::processClientRequests(int fd) {
     NetworkClient &client = GetRightClient(fd);
     char *buffer = client._buffer;
     size_t client_buffer_size = sizeof(client._buffer);
-    size_t bytes_received;
+    int bytes_received;
 
     bzero(buffer, client_buffer_size);
     bytes_received = read(client.fetchConnectionSocket(), buffer, client_buffer_size - 1);
     if (bytes_received <= 0) {
         if (bytes_received == 0) {
+		    std::cout << "Client disconnected" << std::endl;
             close(fd);
             closeClient(fd);
             FD_CLR(fd, &(this->readSet));
             return;
         }
+        else if (bytes_received == -1) {
+		    std::cerr << "Error: read() failed" << std::endl;
+		    return ;
+	    }
     }
 	client.saveRequestData(bytes_received);
-	// std::cout<< client.getRequest().getRequestData() << std::endl;
+    client.updateLastActivityTime();
+	std::cout << client.getRequest().getRequestData() << std::endl;
+    if (client.getRequest().getRequestData().empty()) 
+    {
+        client.getRequest().setErrorCode(408);
+        client.getRequest().set_requestStatus(HttpRequest::REQUEST_READY);
+        FD_SET(fd, &this->writeSet);
+        return;
+    }
+
     CheckRequestStatus(client);
     if (client.getRequest().get_requestStatus() == HttpRequest::REQUEST_READY) {
-        // std::cout << "Meth: " << client.getRequest().getMethod() <<  "\n";
+    //     std::cout << "Meth: " << client.getRequest().getMethod() <<  "\n";
     // client.getRequest().printHeaders();
     // std::cout << "\n";
         // std::cout << "size of body " << client.getRequest().getBodysize();
@@ -190,33 +209,51 @@ void WebServer::processClientRequests(int fd) {
     }
 }
 
+
 void WebServer::run() {
     fd_set readcpy;
     fd_set writecpy;
+    struct timeval timeout;
+
+    if (serverSockets.empty()) 
+        exit(EXIT_FAILURE);
+
     while (true) {
         readcpy = this->readSet;
         writecpy = this->writeSet;
         this->highestFd = *std::max_element(this->serverSockets.begin(), this->serverSockets.end());
-        // std::cout << "this->highestFd " << this->highestFd << std::endl;
         int maxFd = this->highestFd;
-        // std::cout << "this->highestFd2 " << maxFd<< std::endl;
+
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+    
         signal(SIGPIPE, SIG_IGN);
-        if (select(maxFd + 1, &readcpy, &writecpy, NULL, NULL) < 0) {
+        int activity = select(maxFd + 1, &readcpy, &writecpy, NULL, &timeout);
+        if (activity < 0)
             std::cerr << "Error in select()." << std::endl;
+        else if (activity == 0) {
+            handleTimeouts();
         }
-        for (int i = 3; i <= maxFd; i++) {
-                if (FD_ISSET(i, &writecpy)) {
+        else
+        {
+            for (int i = 3; i <= maxFd; i++)
+            {
+                if (FD_ISSET(i, &writecpy))
+                {
                     NetworkClient &client = GetRightClient(i);
                     sendDataToClient(client);
                 }
-                else if (FD_ISSET(i, &readcpy)) {
-                    if (FD_ISSET(i , &(this->masterSet))) {
-                        acceptNewClient(i);                                               
-                    } else {
+                else if (FD_ISSET(i, &readcpy))
+                {
+                    if (FD_ISSET(i, &(this->masterSet))) {
+                        acceptNewClient(i);
+                    }
+                    else {
                         processClientRequests(i);
                     }
                 }
-        }   
+            }
+        }
     }
 }
 
@@ -227,7 +264,6 @@ const ConfigServer& WebServer::matchServerByFd(int fd)
         if ((*serverConfigs)[i].getSocket() == fd) 
             return (*serverConfigs)[i];
     }
-   // std::cerr << "No matching server found for socket fd: " << fd << std::endl;
     return (*serverConfigs)[0];
 }
 
@@ -240,9 +276,6 @@ void WebServer::acceptNewClient(int serverSocket) {
         return;
     }
     fcntl(clientSocket, F_SETFL, O_NONBLOCK);
-    // long option_len = 1;
-    // setsockopt(clientSocket, SOL_SOCKET, SO_NOSIGPIPE , &option_len, sizeof(option_len));
-    // setSocketNonBlocking(clientSocket);
     const ConfigServer& associatedServer = matchServerByFd(serverSocket);
     NetworkClient newClient(clientSocket, serverSocket);
     newClient.setServer(associatedServer);
@@ -316,4 +349,49 @@ const ConfigServer& WebServer::matchServerByName(const std::string& host, int po
 void WebServer::sendDataToClient(NetworkClient& client) 
 {
     sendResponse(client.getRequest(), client);
+}
+
+void WebServer::handleTimeouts()
+{
+    std::map<int, NetworkClient>::iterator it = clients.begin();
+    while (it != clients.end())
+    {
+        NetworkClient &client = it->second;
+        if (client.isTimedOut())
+        {
+            std::stringstream ss;
+            int fd = client.fetchConnectionSocket();
+            std::stringstream sse;
+            sse << "<!DOCTYPE html>";
+            sse << "<html>";
+            sse << "<head><title> 408 </title></head>";
+            sse << "<body>";
+            sse << "<center><h1> 408 Request Timeout </h1></center>";
+            sse << "<hr><center>Welcome to our Webserv</center>";
+            sse << "</body>" << "</html>";
+            std::string _body = sse.str();
+    		off_t _bdSize = _body.size();
+            ss << "HTTP/1.1 " << "408 Request Timeout" << "\r\n";
+            ss << "Server: Webserv/1.1" << "\r\n";
+            ss << "Content-Length: " << toString(_bdSize) << "\r\n";
+            ss << "Content-Type: " << "text/html" << "\r\n";
+            ss << "Date: " << HttpResponse::generateDate() << "\r\n";
+            ss << "\r\n";
+            std::string _buffer = ss.str();
+            send(fd, _buffer.c_str(), _buffer.length(), 0);
+            send(fd, _body.c_str(), _body.length(), 0);
+            std::cout << _buffer << _body << "\n";
+            close(fd);
+            FD_CLR(fd, &masterSet);
+            FD_CLR(fd, &readSet);
+            FD_CLR(fd, &writeSet);
+            std::map<int, NetworkClient>::iterator it_to_erase = it;
+            ++it;
+            clients.erase(it_to_erase);
+            std::cout << "Client with socket " << fd << " has been closed due to timeout." << std::endl;
+            std::cout << "408 Request Timeout" << std::endl;
+        }
+        else
+            ++it;
+    }
 }

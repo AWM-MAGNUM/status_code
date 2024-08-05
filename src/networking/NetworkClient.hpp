@@ -40,10 +40,7 @@ class NetworkClient {
 		void setServer(const ConfigServer& server);
 		friend bool operator==(const NetworkClient& lhs, const NetworkClient& rhs);
 		const ConfigServer& getConfigServer() const;
-		void saveRequestData(size_t nb_bytes) {
-			std::string str_bytes(this->_buffer, nb_bytes);
-			this->_req.setRequestData(str_bytes);
-		};
+		void saveRequestData(size_t nb_bytes);
 
 		ConfigServer& getServer();
 
@@ -72,24 +69,28 @@ class NetworkClient {
 		void setBytesSent(std::size_t bytes);
     	std::size_t getBytesSent() const;
 
+		bool isTimedOut() const;
+		void updateLastActivityTime();
+
 	private:
-		bool	_respReady;
-		HttpRequest _req;
-		int serverSocketId;
-		int connectionSocketId;
-		ConfigServer server;
-		socklen_t clientAddressSize;
-		sockaddr_in clientDetails;
-		std::string responseHeader;
-		std::string responseBody;
-		std::string fullResponse;
-		bool headerDispatched;
-		bool fileAccessed;
-		bool _headersSent;
-		bool _openFile;
-		std::string _response;
-		std::size_t bytesSent;
-		size_t		_respSize;
+		bool			_respReady;
+		HttpRequest 	_req;
+		int				serverSocketId;
+		int				connectionSocketId;
+		ConfigServer	server;
+		socklen_t		clientAddressSize;
+		sockaddr_in		clientDetails;
+		std::string		responseHeader;
+		std::string		responseBody;
+		std::string		fullResponse;
+		bool			headerDispatched;
+		bool			fileAccessed;
+		bool			_headersSent;
+		bool			_openFile;
+		std::string		_response;
+		std::size_t		bytesSent;
+		size_t			_respSize;
+		time_t			lastActivityTime;
 };
 
 #endif // NETWORK_CLIENT_HPP

@@ -1,14 +1,15 @@
+#!/usr/bin/php-cgi
 <?php
-	if (isset ($_POST['name']))
-		echo $_POST['name'];
-	else
-	{
-		?>
-		<form action="test2.php" method="post">
-			<input type="text" name="name">
-			<input type="text" name="sname">
-			<input type="submit" value="send">
-		</form>
-		<?php
-	}
+
+header("Content-Type: text/html");
+
+echo "<!DOCTYPE html>";
+echo "<html>";
+echo "<head>";
+echo "<title>Script CGI PHP</title>";
+echo "</head>";
+echo "<body>";
+echo "<h1>Hello, world! This is a PHP CGI script.</h1>";
+echo "</body>";
+echo "</html>";
 ?>
