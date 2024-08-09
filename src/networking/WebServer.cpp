@@ -219,9 +219,9 @@ void WebServer::run() {
         int activity = select(maxFd + 1, &readcpy, &writecpy, NULL, &timeout);
         if (activity < 0)
             std::cerr << "Error in select()." << std::endl;
-        // else if (activity == 0) {
-        //     handleTimeouts();
-        // }
+        else if (activity == 0) {
+            handleTimeouts();
+        }
         else
         {
             for (int i = 3; i <= maxFd; i++)
@@ -339,14 +339,64 @@ void WebServer::sendDataToClient(NetworkClient& client)
     sendResponse(client.getRequest(), client);
 }
 
-void WebServer::handleTimeouts()
+// void WebServer::handleTimeouts()
+// {
+//     std::map<int, NetworkClient>::iterator it = clients.begin();
+//     while (it != clients.end())
+//     {
+//         NetworkClient &client = it->second;
+//         if (client.isTimedOut())
+//         {
+//             std::stringstream ss;
+//             int fd = client.fetchConnectionSocket();
+//             std::stringstream sse;
+//             sse << "<!DOCTYPE html>";
+//             sse << "<html>";
+//             sse << "<head><title> 408 </title></head>";
+//             sse << "<body>";
+//             sse << "<center><h1> 408 Request Timeout </h1></center>";
+//             sse << "<hr><center>Welcome to our Webserv</center>";
+//             sse << "</body>" << "</html>";
+//             std::string _body = sse.str();
+//     		off_t _bdSize = _body.size();
+//             ss << "HTTP/1.1 " << "408 Request Timeout" << "\r\n";
+//             ss << "Server: Webserv/1.1" << "\r\n";
+//             ss << "Content-Length: " << toString(_bdSize) << "\r\n";
+//             ss << "Content-Type: " << "text/html" << "\r\n";
+//             ss << "Date: " << HttpResponse::generateDate() << "\r\n";
+//             ss << "\r\n";
+//             std::string _buffer = ss.str();
+//             send(fd, _buffer.c_str(), _buffer.length(), 0);
+//             send(fd, _body.c_str(), _body.length(), 0);
+//             std::cout << _buffer << _body << "\n";
+//             close(fd);
+//             FD_CLR(fd, &masterSet);
+//             FD_CLR(fd, &readSet);
+//             FD_CLR(fd, &writeSet);
+//             std::map<int, NetworkClient>::iterator it_to_erase = it;
+//             ++it;
+//             clients.erase(it_to_erase);
+//             std::cout << "Client with socket " << fd << " has been closed due to timeout." << std::endl;
+//             std::cout << "408 Request Timeout" << std::endl;
+//         }
+//         else
+//             ++it;
+//     }
+// }
+
+void WebServer::handleTimeouts() 
 {
     std::map<int, NetworkClient>::iterator it = clients.begin();
-    while (it != clients.end())
-    {
+    while (it != clients.end()) {
         NetworkClient &client = it->second;
-        if (client.isTimedOut())
-        {
+        if (client.isTimedOut()) {
+            HttpRequest &request = client.getRequest();
+            if (request.getMethod() == "GET" && request.isVideoRequest()) 
+            {
+                client.extendTimeout();
+                ++it;
+                continue;
+            }
             std::stringstream ss;
             int fd = client.fetchConnectionSocket();
             std::stringstream sse;
@@ -358,7 +408,7 @@ void WebServer::handleTimeouts()
             sse << "<hr><center>Welcome to our Webserv</center>";
             sse << "</body>" << "</html>";
             std::string _body = sse.str();
-    		off_t _bdSize = _body.size();
+            off_t _bdSize = _body.size();
             ss << "HTTP/1.1 " << "408 Request Timeout" << "\r\n";
             ss << "Server: Webserv/1.1" << "\r\n";
             ss << "Content-Length: " << toString(_bdSize) << "\r\n";
@@ -378,8 +428,8 @@ void WebServer::handleTimeouts()
             clients.erase(it_to_erase);
             std::cout << "Client with socket " << fd << " has been closed due to timeout." << std::endl;
             std::cout << "408 Request Timeout" << std::endl;
-        }
-        else
+        } else {
             ++it;
+        }
     }
 }

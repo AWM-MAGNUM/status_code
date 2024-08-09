@@ -75,6 +75,13 @@ class NetworkClient {
 		void updateLastActivityTime();
 		bool isText;
 
+		void extendTimeout() 
+		{
+    		this->updateLastActivityTime();
+    		std::cout << "Timeout extended for client with socket " << this->fetchConnectionSocket() << std::endl;
+		}
+
+
 	private:
 		bool			_respReady;
 		HttpRequest 	_req;
