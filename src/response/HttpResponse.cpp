@@ -25,7 +25,8 @@ HttpResponse::HttpResponse(NetworkClient &client) :
     _isText(false),
     _slashSetted(false),
     _cookie(""),
-	_respCookie("")
+	_respCookie(""),
+    _redir(false)
     {}
 
 HttpResponse::~HttpResponse(){}
@@ -34,12 +35,15 @@ bool	HttpResponse::isText() const{
 	return this->_isText;
 }
 
+bool	HttpResponse::getRedir() const {
+    return this->_redir;
+}
+
 void	HttpResponse::locateErrorPage(int errCode) {
 	for (std::map<int, std::string>::iterator it = _errorPage.begin(); it != _errorPage.end(); it++) {
 		if (it->first == errCode) {
 			_errorPath = it->second + "/" + toString(errCode) + ".html";
 			_errorPath = deleteRedundantSlash(_errorPath);
-			// std::cout << _errorPath << "\n";
 			return ;
 		}
 	}
@@ -49,10 +53,6 @@ void	HttpResponse::locateErrorPage(int errCode) {
 void	HttpResponse::_handleDefaultErrors() {
 	if (_errCode == 505) {
 		buildResponse(505);
-		return ;
-	}
-	if (_errCode == 501) {
-		buildResponse(501);
 		return ;
 	}
 	if (_errCode == 400 || _errCode == 414 || _errCode == 408) {
@@ -90,23 +90,23 @@ void	HttpResponse::generateResponse(HttpRequest &req) {
 	_errCode = req.getErrorCode();
     _cookie = req.getCookie();
     _reqHeader = req.getHeaderFields();
-	// std::cout << "errcode result from req:" << _errCode << "\n";
 	_uri = getRequestedResource(req);
 	_filePath = deleteRedundantSlash(_uri);
-	// std::cout << "filePath: "<< _filePath << "\n";
 	std::string path = resolvePath(_filePath);
 	if (!path.empty())
 	{
-		// std::cout << "root: "<< _root << "\n";
 		if (!isPathValid(path, _root)) {
 			buildResponse(403);
 			return;
 		}
-		// _filePath = path;
 	}
 	if (_filePath.empty()) {
 		buildResponse(404);
 		return;
+	}
+	if (_errCode == 501) {
+		buildResponse(501);
+		return ;
 	}
 	checkHttpVersion(req);
 	if (_errCode != 0) {
@@ -115,8 +115,7 @@ void	HttpResponse::generateResponse(HttpRequest &req) {
 	}
     if ( _maxBodySize < req.getBodysize()) {
         buildResponse(413);
-		return ; /*Content Too Large response status code indicates that
-			// the request entity is larger than limits defined by server*/
+		return ;
     }
 	if (!_redirection.empty()) {
 		std::string header = createResponseHeader(301, "Default");
@@ -134,7 +133,7 @@ void	HttpResponse::generateResponse(HttpRequest &req) {
 		return ;
 	}
 	if (req.getMethod() == "DELETE") {
-		handleDeleteMethod(); //where u put the Delete method
+		handleDeleteMethod();
 		return ;
 	}
 	return ;
@@ -208,7 +207,6 @@ std::string	HttpResponse::getContentLength(std::string path) {
     if (stat(path.c_str(), &fileStat) == 0) 
     {
 		_fileSize = fileStat.st_size;
-		// std::cout << "file exist of size: " << _fileSize << "\n";
         std::ostringstream oss;
         oss << fileStat.st_size;
         return oss.str();
@@ -255,7 +253,6 @@ std::string	HttpResponse::createResponseHeader(int errCode, std::string flag) {
             _errorPath = sse.str();
     		_fileSize = _errorPath.size();
 			_headers["Content-Length"] = toString(_fileSize);
-            // std::cout << "dkhaaaaaal\n";
             _isText = true;
         }
     	_headers["Content-Type"] = "text/html";
@@ -308,7 +305,6 @@ void	HttpResponse::buildResponse(int errCode) {
     std::string header = createResponseHeader(_errCode, "Default");
 
     _client.setResponseHeader(header);
-    // std::cout << _errorPath << "\n";
     _client.setResponseBody(_errorPath);
 }
 
@@ -361,13 +357,11 @@ std::string	HttpResponse::getRequestedResource(HttpRequest &req) {
         size_t pos = req.getUri().find(it->getLocationName());
         if (pos != std::string::npos && pos == 0)
         {
-			// std::cout << "dkhaaaal\n";
 			if (req.getUri().size() > it->getLocationName().size()
 				&& it->getLocationName() != "/"
 				&& req.getUri()[it->getLocationName().size()] != '/');
 			else if (it->getLocationName().size() > location.size())
 			{
-                // std::cout << "lqa loc\n";
             	_location = *it;
 				location = it->getLocationName();
                 exist = true;
@@ -385,7 +379,6 @@ std::string	HttpResponse::getRequestedResource(HttpRequest &req) {
     }
 	if (exist == true && req.getUri().find(_root) == std::string::npos)
 	{
-            // std::cout << "kidkholdcdefcesfvf " << "\n";
             if (_location.getBodySet() == false) {
                 _maxBodySize = _serv.getMaxBodySize();
             }
@@ -413,11 +406,10 @@ std::string	HttpResponse::getRequestedResource(HttpRequest &req) {
                 size_t urisize = _client.getRequest().getUri().size();
                 if ((_root[_root.size() - 1]) != '/' && _client.getRequest().getUri()[urisize - 1] != '/')
                 {
-                    // std::cout << "ma fhamtch1\n";
                     std::string hostt = _serv.getHost() + ":" + toString(_serv.getPort());
                     std::string dirdir = _location.getLocationName().empty() ? findDirectoryName(_filePath, _root) + "/" : _location.getLocationName() + findDirectoryName(_filePath, _root) + "/";
-                    // std::cout << _filePath << " lastdir: " << dirdir<< "\n";
                     _redirection = "http://" + hostt + dirdir;
+                    _redir = true;
                     return _filePath;
                 }
             }
@@ -426,11 +418,9 @@ std::string	HttpResponse::getRequestedResource(HttpRequest &req) {
 
             if (_autoindex || _idxFiles.size() != 0)
             {
-                // std::cout << "root " << _root << "\n";
                 _filePath = _constructPath(relativePath, _root, "");
                 return _filePath;
             }
-            // std::cout << "fff " << _filePath << "\n";
         return _filePath;
 	}
 	_root = _serv.getRoot();
@@ -446,10 +436,10 @@ std::string	HttpResponse::getRequestedResource(HttpRequest &req) {
         size_t urisize = _client.getRequest().getUri().size();
         if ((_root[_root.size() - 1]) != '/' && _client.getRequest().getUri()[urisize - 1] != '/')
         {
-            // std::cout << "ma fhamtch2\n";
             std::string hostt = _serv.getHost() + ":" + toString(_serv.getPort());
             std::string dirdir = _location.getLocationName().empty() ? findDirectoryName(_filePath, _root) + "/" : _location.getLocationName() + findDirectoryName(_filePath, _root) + "/";
             _redirection = "http://" + hostt + dirdir;
+            _redir = true;
             return _filePath;
         }
     }

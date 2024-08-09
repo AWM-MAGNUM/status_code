@@ -169,6 +169,7 @@ void	HttpResponse::_postRequestFile() {
         std::string response_cgi = _client.getResponse();
         _contentType = findContentTypePOST(response_cgi);
         _client.setResponseBody(extractBodyPOST(_client.getResponse()));
+        std::cout << "response body post: " << _client.getResponseBody() << "\n";
         std::stringstream ss;
         ss << _client.getResponseBody().length();
         std::string body_length = ss.str();
@@ -192,6 +193,7 @@ void	HttpResponse::isUrihasSlashInTHeEnd() {
 	   std::string header = createResponseHeader(301, "Default");
     	_client.setResponseHeader(header);
         _client.setResponseBody(_errorPath);
+        _redir = true;
 		_slashSetted = true;
 		return ;
 	}
@@ -213,7 +215,6 @@ bool HttpResponse::isPostDirHasIndexFiles() {
 	if (_idxFiles.size() != 0) {
 		for (size_t i = 0; i <_idxFiles.size(); i++) {
 			std::string path = _filePath + _idxFiles[i];
-			// std::cout << "haas index\n" << path << "\n";
 			path = deleteRedundantSlash(path);
 			std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
 

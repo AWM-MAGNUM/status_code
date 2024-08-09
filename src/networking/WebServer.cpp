@@ -71,7 +71,7 @@ void WebServer::addSocketFd(int fd)
 
 void WebServer::setupServerSockets() 
 {
-     for (size_t i = 0; i < serverConfigs->size(); ++i) 
+    for (size_t i = 0; i < serverConfigs->size(); ++i) 
     {
         int sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) 
@@ -116,12 +116,6 @@ void WebServer::setupServerSockets()
        std::cout << "Server " << (*serverConfigs)[i].getServerName() 
                  << " set up on " << (*serverConfigs)[i].getHost() 
                  << ":" << (*serverConfigs)[i].getPort() << " with socket: " << sockfd << std::endl;
-        
-        if (serverSockets.empty()) 
-        {
-            std::cerr << "Error: serverSockets is empty after setupServerSockets()" << std::endl;
-            exit(EXIT_FAILURE);
-        }
     }
 }
 
@@ -185,27 +179,22 @@ void WebServer::processClientRequests(int fd) {
 
     CheckRequestStatus(client);
     if (client.getRequest().get_requestStatus() == HttpRequest::REQUEST_READY) {
-    //     std::cout << "Meth: " << client.getRequest().getMethod() <<  "\n";
-    // client.getRequest().printHeaders();
-    // std::cout << "\n";
-        // std::cout << "size of body " << client.getRequest().getBodysize();
-    //     std::string hostHeader = client.getRequest().getHeader("Host");
-    //     hostHeader = trimm(hostHeader);
+        // std::string hostHeader = client.getRequest().getHeader("Host");
+        // hostHeader = trimm(hostHeader);
 
-    //     size_t portPos = hostHeader.find(":");
-    //     int port = 80; // Default to 80 if no port is specified
-    //     if (portPos != std::string::npos) {
-    //         port = std::atoi(hostHeader.substr(portPos + 1).c_str());
-    //         hostHeader = hostHeader.substr(0, portPos);
-    //     } else {
-    //         port = client.getServer().getPort();
-    //     }
+        // size_t portPos = hostHeader.find(":");
+        // int port = 80; // Default to 80 if no port is specified
+        // if (portPos != std::string::npos) {
+        //     port = std::atoi(hostHeader.substr(portPos + 1).c_str());
+        //     hostHeader = hostHeader.substr(0, portPos);
+        // } else {
+        //     port = client.getServer().getPort();
+        // }
 
-    //     const ConfigServer &clientServer = matchServerByName(client.getRequest().getHeader("Host"), port);
+        // const ConfigServer &clientServer = matchServerByName(client.getRequest().getHeader("Host"), port);
     //    // std::cout << "Port in processClientRequests: " << clientServer.getPort() << std::endl; // Debugging output
     //     client.setServer(clientServer);
         FD_SET(fd, &this->writeSet);
-
     }
 }
 
@@ -217,7 +206,6 @@ void WebServer::run() {
 
     if (serverSockets.empty()) 
         exit(EXIT_FAILURE);
-
     while (true) {
         readcpy = this->readSet;
         writecpy = this->writeSet;
@@ -231,9 +219,9 @@ void WebServer::run() {
         int activity = select(maxFd + 1, &readcpy, &writecpy, NULL, &timeout);
         if (activity < 0)
             std::cerr << "Error in select()." << std::endl;
-        else if (activity == 0) {
-            handleTimeouts();
-        }
+        // else if (activity == 0) {
+        //     handleTimeouts();
+        // }
         else
         {
             for (int i = 3; i <= maxFd; i++)

@@ -270,7 +270,6 @@ void	HttpResponse::_isFile()
 {
     // Handle file
 	std::string script_name = Get_File_Name_From_URI();
-	std::string filePath = _client.getRequest().getUri();
     std::ifstream file(_filePath.c_str(), std::ios::in | std::ios::binary);
 	if (file) 
 	{
@@ -282,9 +281,10 @@ void	HttpResponse::_isFile()
 			CGI cgi(_client, _filePath);
 			cgi.set_environmentVariables(script_name);
 			cgi.RUN();
+			// std::cout << "status: " << cgi.status_code << std::endl;
+			// exit(2);
 			if (cgi.status_code != 200)
-			{  
-				// std::cout << "ERROCODE CGI " << cgi.status_code << std::endl;
+			{
 				buildResponse(cgi.status_code);
 				return;
 			}
@@ -312,13 +312,12 @@ void	HttpResponse::_isFile()
 		std::string header = createResponseHeader(200, "Nothing");
 		_client.setResponseHeader(header);
 		_client.setResponseBody(_filePath);
-		// std::cout << "the file exist: " << "'" << _filePath << "'\n";
 		// std::cout << _client.getResponseBody() << std::endl;
-
 		return ;
 	}
 	else {
-		buildResponse(404);
+        // File exists but cannot be opened (permissions issue or other)
+        buildResponse(500);
 		return ;
 	}
 }
